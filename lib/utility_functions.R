@@ -1,0 +1,130 @@
+# create happy command
+# vcfeval - whether or not to use the vcfeval engine for comparison, otherwise hap.py uses xcmp
+run_happy<-function(happy_path,truth_vcf,query_vcf,reference,target_region,fp_bed,output_prefix,
+                    vcfeval=TRUE,
+                    vcfeval_path='/media/SSD/Bioinformatics/Tools/rtg-tools-3.12.1-32d4c2d2/rtg',
+                    vcfeval_template='/media/SSD/Bioinformatics/Databases/hg19/hg19.SDF',
+                    stratification='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications/stratifications.csv'){
+  
+  happy_command<-sprintf('%s %s %s "%s" -r %s -T %s -f %s -o %s -X',
+                         python_path,
+                         happy_path,
+                         truth_vcf,
+                         query_vcf,
+                         reference,
+                         target_region,
+                         fp_bed,
+                         output_prefix)
+  if (vcfeval){
+    happy_command<-sprintf('%s --engine vcfeval --engine-vcfeval-path %s --engine-vcfeval-template %s',happy_command,vcfeval_path,vcfeval_template)
+  }
+  if (!is.na(stratification)){
+    happy_command<-sprintf('%s --stratification %s',happy_command,stratification)
+  }
+  
+  message(sprintf('Running: %s',happy_command))
+  info(logger,happy_command)
+  output_dir<-sprintf('./output/%s',output_prefix)
+  if (!dir.exists(output_dir)){dir.create(output_dir)}
+  setwd(output_dir)
+  system(happy_command)
+  setwd('../..')
+}
+
+# collect happy results
+collect_happy_results<-function(samples_sheet){
+  happy_outcomes<-NULL
+  for (i in 1:nrow(samples_sheet)){
+    sample<-samples_sheet%>%slice(i)
+    query_group<-sample%>%pull(query_group)
+    query_name<-sample%>%pull(query_name)
+    # Parse happy output
+    happy_extended<-read.table(sprintf('./output/%s/%s.extended.csv',query_name,query_name),header=T,sep=',')
+    happy_outcomes<-happy_outcomes%>%rbind(data.frame(query_group,query_name,happy_extended))
+  }
+  return(happy_outcomes)
+}
+
+# produce happy summary per group
+happy_summary_per_group <- function(happy_results) {
+  happy_results %>%
+    select(query_group,
+           Subset,
+           Type,
+           Filter,
+           Subtype,
+           contains('METRIC.')) %>%
+    pivot_longer(-c(query_group, Subset, Type, Filter, Subtype), names_to = 'Metric') %>%
+    mutate(Metric = str_replace(Metric, 'METRIC.', '')) %>%
+    filter(Metric != 'Frac_NA') %>%
+    group_by(query_group, Subset, Type, Filter, Subtype, Metric) %>%
+    dplyr::summarise(skim_without_charts(value))%>%
+    select(-c(skim_type,skim_variable,n_missing,complete_rate))
+}
+
+# plot happy results
+# facet_by - choose which parameters (in addition to type and metric) to facet by
+plot_happy_results <-
+  function(happy_results,
+           query_group_name=NA,
+           subset = c('*'),
+           subtype = c('*'),
+           filter = c('ALL'),
+           var_type = c('SNP','INDEL'),
+           facet_by=c()) {
+    to_plot<-happy_results %>% 
+      select('Type', 'Subtype', 'Filter','Subset', contains(c('query_', 'METRIC.'))) %>%
+      filter(Subtype %in% subtype & Filter %in% filter & Subset %in% subset & Type %in% var_type)
+    if (!is.na(query_group_name)) {
+      to_plot <- to_plot %>% filter(query_group %in% query_group_name)
+    }
+    
+    facet_formula<-'Type ~ Metric'
+    if (length(facet_by)>0){
+      facet_formula<-sprintf('%s + %s',facet_formula,paste0(facet_by,collapse = '+'))
+    }
+    facet_formula<-as.formula(facet_formula)
+    g<-to_plot%>%
+      pivot_longer(-c(Type, Filter, Subtype, Subset, query_group, query_name),names_to = 'Metric') %>%
+      filter(Metric != 'METRIC.Frac_NA') %>%
+      mutate(Metric=str_replace(Metric,'METRIC.',''))%>%
+      ggplot(aes(x = query_group, y = value,fill=query_group)) +
+      geom_boxplot(alpha=0.5) +
+      facet_wrap(facet_formula, scales = 'free') +
+      theme_minimal()+
+      scale_fill_nejm()+
+      coord_flip()+
+      guides(fill='none')
+    print(g)
+  }
+
+# generate sample table 
+# get a sample name and the happy results and generate a concise sample summary table
+generate_sample_table <- function(happy_results, sample_name) {
+  sample_table <- happy_results %>% filter(query_name == sample_name &
+                                             Subtype == '*' &
+                                             Subset != 'TS_boundary' &
+                                             Filter == 'PASS') %>%
+    mutate(col_name = sprintf('%s: %s', Subset, Type)) %>%
+    arrange(desc(Type)) %>% # sort so that SNPs are before INDELS
+    select(-c(Subtype, contains(
+      c(
+        'query_',
+        'TRUTH.',
+        'QUERY.UNK',
+        'Genotype',
+        'QQ',
+        'Type',
+        'Subset',
+        'Filter'
+      )
+    ))) %>%
+    t() %>% as.data.frame()
+  colnames(sample_table) <-
+    str_replace(sample_table['col_name', ], '\\*', 'ALL')
+  sample_table <-
+    sample_table[setdiff(rownames(sample_table), 'col_name'), ] %>%
+    mutate(across(everything(), as.numeric)) %>%
+    mutate(across(where(is.numeric), round, 3))
+  return(sample_table)
+}

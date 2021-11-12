@@ -1,0 +1,121 @@
+---
+title: "VCF validation - With Hap.py and GIAB data"
+author: "Clalit Genomics"
+date: "11/8/2021"
+output: 
+  html_document:
+    theme: united
+    toc: true
+    toc_float: true
+---
+
+```{r render_report,eval=F,echo=F}
+library(rmarkdown)
+output_dir <- "/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/output/reports"
+render('/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/src/sequencing_validation_analysis.Rmd', output_dir = output_dir,output_file = sprintf('vcf_validation_report.%s.html',Sys.Date()))
+```
+
+```{r setup, include=FALSE}
+project_dir<-'/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/'
+knitr::opts_knit$set(root.dir='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/')
+knitr::opts_chunk$set(echo = F)
+library(ProjectTemplate)
+setwd(project_dir)
+load.project()
+```
+
+```{r run_happy,eval=FALSE,echo=FALSE}
+happy_path<-'/media/SSD/Bioinformatics/Tools/hap.py-build/bin/hap.py'
+python_path<-'/usr/bin/python2.7'
+reference<-'/media/SSD/Bioinformatics/Databases/hg19/hg19.fa'
+target_region<-'/media/SSD/Bioinformatics/Databases/idt/xgen-exome-research-panel-v2-targets-hg19.bed'
+
+for (i in 1:nrow(samples_sheet)){
+  sample<-samples_sheet%>%slice(i)
+  giab_ref<-giab_sheet%>%filter(name==sample$truth)
+  truth<-giab_ref%>%pull(vcf)
+  fp_bed<-giab_ref%>%pull(false_positive)
+  query<-sample%>%pull(query_path)
+  output_prefix<-sample%>%pull(query_name)
+  info(logger,print(sprintf('Analyzing %s, comparing against %s..',output_prefix,giab_ref$name)))
+  #message(sprintf('Analyzing %s, comparing against %s..',output_prefix,giab_ref$name))
+  run_happy(happy_path,truth,query,reference,target_region,fp_bed,output_prefix = output_prefix)
+  info(logger,print(sprintf('Done analyzing %s.',output_prefix)))
+}
+
+```
+
+# Sample sheet
+
+```{r sample_sheet_table}
+DT::datatable(samples_sheet,
+              options=list(scrollX=T),
+              filter = list(position = 'top', clear = FALSE))
+```
+
+# Hap.py results: All samples
+
+```{r happy_results_table,eval=T}
+# retrieve the happy outcome files
+happy_results<-collect_happy_results(samples_sheet)
+DT::datatable(happy_results,
+              options=list(scrollX=T),
+              filter = list(position = 'top', clear = FALSE))
+```
+
+# Hap.py results: Per Sample {.tabset}
+
+```{r happy_results_per_sample,eval=T, results='asis',eval=T,warning=F}
+# retrieve the happy outcome files
+happy_results<-collect_happy_results(samples_sheet)
+for (sample_name in unique(happy_results$query_name)){
+  cat('## ',sample_name,'\n')
+  sample_table<-generate_sample_table(happy_results,sample_name)
+  print(tagList(DT::datatable(sample_table,
+                options=list(scrollX=T,pageLength=50),
+                filter = list(position = 'top', clear = FALSE))))
+  cat('\n\n')
+}
+```
+
+
+# Hap.py results: Aggregated
+
+```{r happy_summary_table,eval=T,warning=F}
+# summarize results
+happy_summary<-happy_summary_per_group(happy_results)
+DT::datatable(happy_summary,
+              options=list(scrollX=T),
+              filter = list(position = 'top', clear = FALSE))
+```
+
+# Hap.py results: Plots {.tabset}
+
+```{r happy_plots, results='asis',eval=T,out.width='100%'}
+# Plot the results
+for (subset in unique(happy_results$Subset)){
+  if (subset=='TS_boundary'){next}
+  cat('## Subset:',subset,'\n')
+  plot_happy_results(happy_results,
+             query_group_name=NA,
+             subset = c(subset),
+             subtype = c('*'),
+             filter = c('PASS'),
+             var_type = c('SNP','INDEL'),
+             facet_by=c())
+  cat('\n\n')
+}
+
+for (subtype in unique(happy_results$Subtype)){
+  if (grepl('^C',subtype)){next}
+  cat('## Subtype:',subtype,'\n')
+  plot_happy_results(happy_results,
+             query_group_name=NA,
+             subset = c('*'),
+             subtype = c(subtype),
+             filter = c('PASS'),
+             var_type = c('SNP','INDEL'),
+             facet_by=c())
+  cat('\n\n')
+}
+```
