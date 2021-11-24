@@ -7,6 +7,8 @@ output:
     theme: united
     toc: true
     toc_float: true
+    fig_width: 12
+    fig_height: 8
 ---
 
 ```{r render_report,eval=F,echo=F}
@@ -15,7 +17,19 @@ output_dir <- "/media/SSD/Bioinformatics/Projects/sequencing_validation/sequenci
 render('/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/src/sequencing_validation_analysis.Rmd', output_dir = output_dir,output_file = sprintf('vcf_validation_report.%s.html',Sys.Date()))
 ```
 
-```{r setup, include=FALSE}
+```{r var_setup, include=FALSE}
+# The target region to analyze
+target_region<-NA
+#target_region<-'/media/SSD/Bioinformatics/Databases/idt/xgen-exome-research-panel-v2-targets-hg19.bed'
+
+# The path to the hap.py binary
+happy_path<-'/media/SSD/Bioinformatics/Tools/hap.py-build/bin/hap.py'
+
+# The reference file to use for the analysis
+reference<-'/media/SSD/Bioinformatics/Databases/hg19/hg19.fa'
+```
+
+```{r markdown_setup,include=FALSE}
 project_dir<-'/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/'
 knitr::opts_knit$set(root.dir='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/')
 knitr::opts_chunk$set(echo = F)
@@ -24,23 +38,36 @@ setwd(project_dir)
 load.project()
 ```
 
-```{r run_happy,eval=FALSE,echo=FALSE}
-happy_path<-'/media/SSD/Bioinformatics/Tools/hap.py-build/bin/hap.py'
-python_path<-'/usr/bin/python2.7'
-reference<-'/media/SSD/Bioinformatics/Databases/hg19/hg19.fa'
-target_region<-'/media/SSD/Bioinformatics/Databases/idt/xgen-exome-research-panel-v2-targets-hg19.bed'
+```{r run_happy,eval=TRUE,echo=FALSE,results=FALSE}
 
-for (i in 1:nrow(samples_sheet)){
-  sample<-samples_sheet%>%slice(i)
-  giab_ref<-giab_sheet%>%filter(name==sample$truth)
-  truth<-giab_ref%>%pull(vcf)
-  fp_bed<-giab_ref%>%pull(false_positive)
-  query<-sample%>%pull(query_path)
-  output_prefix<-sample%>%pull(query_name)
-  info(logger,print(sprintf('Analyzing %s, comparing against %s..',output_prefix,giab_ref$name)))
+for (i in 1:nrow(samples_sheet)) {
+  sample <- samples_sheet %>% slice(i)
+  giab_ref <- giab_sheet %>% filter(name == sample$truth)
+  truth <- giab_ref %>% pull(vcf)
+  fp_bed <- giab_ref %>% pull(false_positive)
+  query <- sample %>% pull(query_path)
+  output_prefix <- sample %>% pull(query_name)
+  if (is_sample_already_analyzed(output_prefix)) {
+    next
+  }# make sure sample was not already ran
+  info(logger, print(
+    sprintf(
+      'Analyzing %s, comparing against %s..',
+      output_prefix,
+      giab_ref$name
+    )
+  ))
   #message(sprintf('Analyzing %s, comparing against %s..',output_prefix,giab_ref$name))
-  run_happy(happy_path,truth,query,reference,target_region,fp_bed,output_prefix = output_prefix)
-  info(logger,print(sprintf('Done analyzing %s.',output_prefix)))
+  run_happy(
+    happy_path,
+    truth,
+    query,
+    reference = reference,
+    target_region = target_region,
+    fp_bed = fp_bed,
+    output_prefix = output_prefix
+  )
+  info(logger, print(sprintf('Done analyzing %s.', output_prefix)))
 }
 
 ```
@@ -65,33 +92,37 @@ DT::datatable(happy_results,
 
 # Hap.py results: Per Sample {.tabset}
 
-```{r happy_results_per_sample,eval=T, results='asis',eval=T,warning=F}
+```{r happy_results_per_sample,eval=T, results='asis',warning=F}
 # retrieve the happy outcome files
 happy_results<-collect_happy_results(samples_sheet)
 for (sample_name in unique(happy_results$query_name)){
   cat('## ',sample_name,'\n')
   sample_table<-generate_sample_table(happy_results,sample_name)
   print(tagList(DT::datatable(sample_table,
-                options=list(scrollX=T,pageLength=50),
-                filter = list(position = 'top', clear = FALSE))))
+                options=list(scrollX=T,pageLength=10),
+                filter = list(position = 'top', clear = FALSE)),
+                br(),br()))
   cat('\n\n')
 }
+cat('\n\n')
 ```
-
 
 # Hap.py results: Aggregated
 
-```{r happy_summary_table,eval=T,warning=F}
+```{r happy_summary_table,eval=T,warning=F,message=F}
+
 # summarize results
 happy_summary<-happy_summary_per_group(happy_results)
 DT::datatable(happy_summary,
               options=list(scrollX=T),
               filter = list(position = 'top', clear = FALSE))
+
 ```
+
 
 # Hap.py results: Plots {.tabset}
 
-```{r happy_plots, results='asis',eval=T,out.width='100%'}
+```{r happy_plots, results='asis',eval=T,out.width='150%'}
 # Plot the results
 for (subset in unique(happy_results$Subset)){
   if (subset=='TS_boundary'){next}

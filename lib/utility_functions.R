@@ -1,20 +1,28 @@
+python_path<-'/usr/bin/python2.7'
+
 # create happy command
 # vcfeval - whether or not to use the vcfeval engine for comparison, otherwise hap.py uses xcmp
-run_happy<-function(happy_path,truth_vcf,query_vcf,reference,target_region,fp_bed,output_prefix,
+run_happy<-function(happy_path,truth_vcf,query_vcf,reference,fp_bed,output_prefix,
+                    target_region=NA,
                     vcfeval=TRUE,
                     vcfeval_path='/media/SSD/Bioinformatics/Tools/rtg-tools-3.12.1-32d4c2d2/rtg',
                     vcfeval_template='/media/SSD/Bioinformatics/Databases/hg19/hg19.SDF',
-                    stratification='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications/stratifications.csv'){
+                    stratification='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications/stratifications.csv',
+                    log_file='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/logs/project.log'){
   
-  happy_command<-sprintf('%s %s %s "%s" -r %s -T %s -f %s -o %s -X',
+  happy_command<-sprintf('%s %s %s "%s" -r %s -f %s -o %s -X -V --no-roc --logfile %s',
                          python_path,
                          happy_path,
                          truth_vcf,
                          query_vcf,
                          reference,
-                         target_region,
                          fp_bed,
-                         output_prefix)
+                         output_prefix,
+                         log_file)
+  if (!is.na(target_region)){
+    happy_command<-sprintf('%s -T %s',happy_command,target_region)
+    
+  }
   if (vcfeval){
     happy_command<-sprintf('%s --engine vcfeval --engine-vcfeval-path %s --engine-vcfeval-template %s',happy_command,vcfeval_path,vcfeval_template)
   }
@@ -127,4 +135,16 @@ generate_sample_table <- function(happy_results, sample_name) {
     mutate(across(everything(), as.numeric)) %>%
     mutate(across(where(is.numeric), round, 3))
   return(sample_table)
+}
+
+# test if sample was already ran 
+# check in the output folder, if there is a folder called 'output_prefix' and if so, if there is a summary file there
+is_sample_already_analyzed<-function(output_prefix){
+  if (dir.exists(sprintf('./output/%s',output_prefix))){
+    if (file.exists(sprintf('./output/%s/%s.summary.csv',output_prefix,output_prefix))){
+      info(logger,print(sprintf('%s already analyzed, skipping hap.py stage.',output_prefix)))
+      return(TRUE)
+    }
+  }
+  return(FALSE)
 }
