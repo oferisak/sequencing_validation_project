@@ -17,16 +17,14 @@ output_dir <- "/media/SSD/Bioinformatics/Projects/sequencing_validation/sequenci
 render('/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/src/sequencing_validation_analysis.Rmd', output_dir = output_dir,output_file = sprintf('vcf_validation_report.%s.html',Sys.Date()))
 ```
 
-```{r var_setup, include=FALSE}
-# The target region to analyze
-target_region<-NA
-#target_region<-'/media/SSD/Bioinformatics/Databases/idt/xgen-exome-research-panel-v2-targets-hg19.bed'
-
-# The path to the hap.py binary
+```{r var_setup, include=TRUE,echo=1:3}
 happy_path<-'/media/SSD/Bioinformatics/Tools/hap.py-build/bin/hap.py'
-
-# The reference file to use for the analysis
 reference<-'/media/SSD/Bioinformatics/Databases/hg19/hg19.fa'
+#target_region<-'/media/SSD/Bioinformatics/Databases/idt/xgen-exome-research-panel-v2-targets-hg19.bed'
+target_region<-'/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/targets/idt_twist_agilent_union.bed'
+#target_region<-NA  # NA - means that there is no target region - run the analysis on the whole genome
+
+vcf_stats=F # whether or not to perform vcf stats collection
 ```
 
 ```{r markdown_setup,include=FALSE}
@@ -80,13 +78,34 @@ DT::datatable(samples_sheet,
               filter = list(position = 'top', clear = FALSE))
 ```
 
+# Stratifications 
+
+```{r stratifications_stats}
+
+DT::datatable(strat_files_stats,
+              options=list(scrollX=T),
+              filter = list(position = 'top', clear = FALSE))
+```
+
+# VCF stats
+
+```{r vcf_stats,out.width="150%",include=TRUE,results='hide',message=FALSE,warnings=FALSE}
+if (vcf_stats){
+  info(logger,print(sprintf('Producing VCF coverage plot..')))
+  all_vcfs<-read_all_vcfs(samples_sheet)
+  vcf_coverage_plot<-plot_vcfs_coverage(all_vcfs)
+  vcf_coverage_plot
+}
+```
+
 # Hap.py results: All samples
 
 ```{r happy_results_table,eval=T}
 # retrieve the happy outcome files
 happy_results<-collect_happy_results(samples_sheet)
 DT::datatable(happy_results,
-              options=list(scrollX=T),
+              extensions = 'Buttons', 
+              options=list(scrollX=T,dom = 'Bfrtip',buttons = c('copy', 'csv', 'excel')),
               filter = list(position = 'top', clear = FALSE))
 ```
 
@@ -98,10 +117,20 @@ happy_results<-collect_happy_results(samples_sheet)
 for (sample_name in unique(happy_results$query_name)){
   cat('## ',sample_name,'\n')
   sample_table<-generate_sample_table(happy_results,sample_name)
-  print(tagList(DT::datatable(sample_table,
-                options=list(scrollX=T,pageLength=10),
-                filter = list(position = 'top', clear = FALSE)),
-                br(),br()))
+  print(tagList(
+    DT::datatable(
+      sample_table,
+      extensions = 'Buttons',
+      options = list(
+        scrollX = T,
+        dom = 'Bfrtip',
+        buttons = c('copy', 'csv', 'excel')
+      ),
+      filter = list(position = 'top', clear = FALSE)
+    ),
+    br(),
+    br()
+  ))
   cat('\n\n')
 }
 cat('\n\n')
@@ -113,9 +142,16 @@ cat('\n\n')
 
 # summarize results
 happy_summary<-happy_summary_per_group(happy_results)
-DT::datatable(happy_summary,
-              options=list(scrollX=T),
-              filter = list(position = 'top', clear = FALSE))
+DT::datatable(
+  happy_summary,
+  extensions = 'Buttons',
+  options = list(
+    scrollX = T,
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel')
+  ),
+  filter = list(position = 'top', clear = FALSE)
+)
 
 ```
 
