@@ -21,7 +21,7 @@ render('/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_vali
 happy_path<-'/media/SSD/Bioinformatics/Tools/hap.py-build/bin/hap.py'
 reference<-'/media/SSD/Bioinformatics/Databases/hg19/hg19.fa'
 #target_region<-'/media/SSD/Bioinformatics/Databases/idt/xgen-exome-research-panel-v2-targets-hg19.bed'
-target_region<-'/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/targets/idt_twist_agilent_union.bed'
+target_region<-'/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/targets/refseq_select_cds.bed'
 #target_region<-NA  # NA - means that there is no target region - run the analysis on the whole genome
 
 vcf_stats=F # whether or not to perform vcf stats collection

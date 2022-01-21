@@ -87,23 +87,57 @@ plot_happy_results <-
       to_plot <- to_plot %>% filter(query_group %in% query_group_name)
     }
     
-    facet_formula<-'Type ~ Metric'
+    #facet_formula<-'Type ~ Metric'
+    facet_formula<-'.~Metric'
     if (length(facet_by)>0){
       facet_formula<-sprintf('%s + %s',facet_formula,paste0(facet_by,collapse = '+'))
     }
     facet_formula<-as.formula(facet_formula)
-    g<-to_plot%>%
+    
+    g_indel<-to_plot%>%filter(Type=='INDEL')%>%
       pivot_longer(-c(Type, Filter, Subtype, Subset, query_group, query_name),names_to = 'Metric') %>%
       filter(Metric != 'METRIC.Frac_NA') %>%
       mutate(Metric=str_replace(Metric,'METRIC.',''))%>%
       ggplot(aes(x = query_group, y = value,fill=query_group)) +
       geom_boxplot(alpha=0.5) +
-      facet_wrap(facet_formula, scales = 'free') +
+      facet_wrap(facet_formula) +
       theme_minimal()+
+      ylim(NA,1)+labs(x=NULL,title = ifelse(subtype=='*','Indels',subtype))+
       scale_fill_nejm()+
       coord_flip()+
       guides(fill='none')
+    
+    if (subtype=='*'){
+      g_snp<-to_plot%>%filter(Type=='SNP')%>%
+        pivot_longer(-c(Type, Filter, Subtype, Subset, query_group, query_name),names_to = 'Metric') %>%
+        filter(Metric != 'METRIC.Frac_NA') %>%
+        mutate(Metric=str_replace(Metric,'METRIC.',''))%>%
+        ggplot(aes(x = query_group, y = value,fill=query_group)) +
+        geom_boxplot(alpha=0.5) +
+        facet_wrap(facet_formula) +
+        theme_minimal()+
+        ylim(NA,1)+labs(x=NULL,title = 'SNP')+
+        scale_fill_nejm()+
+        coord_flip()+
+        guides(fill='none')
+        g<-g_snp/g_indel
+    }else{
+      g<-g_indel
+    }
     print(g)
+    # g<-to_plot%>%
+    #   pivot_longer(-c(Type, Filter, Subtype, Subset, query_group, query_name),names_to = 'Metric') %>%
+    #   filter(Metric != 'METRIC.Frac_NA') %>%
+    #   mutate(Metric=str_replace(Metric,'METRIC.',''))%>%
+    #   ggplot(aes(x = query_group, y = value,fill=query_group)) +
+    #   geom_boxplot(alpha=0.5) +
+    #   facet_wrap(facet_formula) +
+    #   theme_minimal()+
+    #   ylim(NA,1)+
+    #   scale_fill_nejm()+
+    #   coord_flip()+
+    #   guides(fill='none')
+    # print(g)
   }
 
 # generate sample table 
