@@ -1,5 +1,12 @@
 python_path<-'/usr/bin/python2.7'
 
+validate_happy_input<-function(truth_vcf,query_vcf,reference,fp_bed){
+  if (!file.exists(truth_vcf)){stop(glue('validate hap.py input: {truth_vcf} is not found!'))}
+  if (!file.exists(query_vcf)){stop(glue('validate hap.py input: {query_vcf} is not found!'))}
+  if (!file.exists(reference)){stop(glue('validate hap.py input: {reference} is not found!'))}
+  if (!file.exists(fp_bed)){stop(glue('validate hap.py input: {fp_bed} is not found!'))}
+}
+
 # create happy command
 # vcfeval - whether or not to use the vcfeval engine for comparison, otherwise hap.py uses xcmp
 run_happy<-function(happy_path,truth_vcf,query_vcf,reference,fp_bed,output_prefix,
@@ -7,8 +14,10 @@ run_happy<-function(happy_path,truth_vcf,query_vcf,reference,fp_bed,output_prefi
                     vcfeval=TRUE,
                     vcfeval_path='/media/SSD/Bioinformatics/Tools/rtg-tools-3.12.1-32d4c2d2/rtg',
                     vcfeval_template='/media/SSD/Bioinformatics/Databases/hg19/hg19.SDF',
-                    stratification='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications/stratifications.csv',
+                    stratification='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications.csv',
                     log_file='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/logs/project.log'){
+  
+  validate_happy_input(truth_vcf,query_vcf,reference,fp_bed)
   
   happy_command<-sprintf('%s %s %s "%s" -r %s -f %s -o %s -X -V --no-roc --logfile %s',
                          python_path,
@@ -46,7 +55,12 @@ collect_happy_results<-function(samples_sheet){
     sample<-samples_sheet%>%slice(i)
     query_group<-sample%>%pull(query_group)
     query_name<-sample%>%pull(query_name)
+    happy_output_file<-glue('./output/{query_name}/{query_name}.extended.csv')
     # Parse happy output
+    if (!file.exists(happy_output_file)){
+      message(glue('{query_name} was not properly analyzed. could not find {happy_output_file}'))
+      next
+      }
     happy_extended<-read.table(sprintf('./output/%s/%s.extended.csv',query_name,query_name),header=T,sep=',')
     happy_outcomes<-happy_outcomes%>%rbind(data.frame(query_group,query_name,happy_extended))
   }

@@ -1,6 +1,6 @@
 
 # parse stratification files
-stratification_files<-read.table('./data/stratifications/stratifications.csv',header=F,sep='\t')
+stratification_files<-read.table('./data/stratifications.csv',header=F,sep='\t')
 colnames(stratification_files)<-c('stratification_name','stratification_file')
 
 # Parse a bed file and output:
