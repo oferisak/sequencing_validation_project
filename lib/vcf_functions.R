@@ -1,3 +1,72 @@
+# use rtg's vcfstats
+rtg_path='/media/SSD/Bioinformatics/Tools/rtg-tools-3.12.1-32d4c2d2/rtg'
+get_vcf_stats<-function(vcf_path,target='ALL'){
+  message(glue('Getting {vcf_path} stats. Target: {target}'))
+  if (target!='ALL'){
+    vcfstats_command<-glue('{rtg_path} vcffilter --include-bed={target} -i {vcf_path} -o - | {rtg_path} vcfstats -')
+  }else{
+    vcfstats_command<-glue('{rtg_path} vcfstats {vcf_path}')
+  }
+  
+  vcfstats_raw_output<-system(vcfstats_command, intern = TRUE)
+  vcfstats_parsed<-vcfstats_raw_output%>%stringr::str_split('\\:',simplify = T)%>%trimws()%>%as.data.frame()
+  colnames(vcfstats_parsed)<-c('metric','value')
+  vcfstats_pivot<-vcfstats_parsed%>%pivot_wider(names_from = metric,values_from = value)
+  vcfstats_pivot<-vcfstats_pivot%>%mutate(across(c(`Failed Filters`,
+                                                   `Passed Filters`,
+                                                   SNPs,
+                                                   MNPs,
+                                                   Insertions,
+                                                   Deletions,
+                                                   Indels),
+                                                 as.numeric))
+  vcfstats_pivot<-vcfstats_pivot%>%mutate(target=target,.before=1)
+  return(vcfstats_pivot)
+}
+
+get_all_vcf_stats_with_stratifications<-function(){
+  all_vcf_stats<-get_samples_sheet_vcf_stats(samples_sheet,target = 'ALL')
+  for (i in 1:nrow(stratification_files)){
+    strat_name<-stratification_files%>%slice(i)%>%pull(stratification_name)
+    strat_file<-stratification_files%>%slice(i)%>%pull(stratification_file)
+    strat_vcf_stats<-get_samples_sheet_vcf_stats(samples_sheet,strat_file)
+    strat_vcf_stats$target<-strat_name
+    all_vcf_stats<-all_vcf_stats%>%bind_rows(strat_vcf_stats)
+  }
+  return(all_vcf_stats)
+}
+
+plot_vcfstats_results<-function(all_vcf_stats,target='ALL'){
+  toPlot<-all_vcf_stats%>%filter(target=='ALL')%>%select(c(sample_name,
+                                   target,
+                                   `Passed Filters`,
+                                   SNPs,
+                                   Insertions,
+                                   Deletions,
+                                   Indels))%>%
+    pivot_longer(-c(sample_name,target))
+  toPlot$group=stringr::str_replace(toPlot$sample_name,'_hg.+','')
+  toPlot$ref=stringr::str_match(toPlot$sample_name,'hg.+')[,1]
+  toPlot%>%ggplot(aes(x=sample_name,y=value,fill=group,col=group,label=value))+
+    geom_col(width= 0.5,alpha=0.5)+geom_text(vjust=1.5,col='black')+
+    facet_grid(name~ref,scales='free')+
+    theme_minimal()+scale_color_nejm()+scale_fill_nejm()
+}
+
+get_samples_sheet_vcf_stats<-function(samples_sheet,target=NA){
+  samples_sheet_vcf_stats<-NULL
+  for (i in 1:nrow(samples_sheet)){
+    vcf_path<-samples_sheet%>%slice(i)%>%pull(query_path)
+    vcf_name<-samples_sheet%>%slice(i)%>%pull(query_name)
+    sample_vcf_stats<-get_vcf_stats(vcf_path,target)
+    sample_vcf_stats<-sample_vcf_stats%>%mutate(sample_name=vcf_name,.before=1)
+    samples_sheet_vcf_stats<-samples_sheet_vcf_stats%>%bind_rows(sample_vcf_stats)
+  }
+  return(samples_sheet_vcf_stats)
+}
+
+
+# DEPRACTED
 # Read VCF and add hom or het status and transition or transversion annotations
 read_vcf<-function(vcf_path){
   vcf_file<-read.vcfR(vcf_path,verbose = F)

@@ -18,7 +18,7 @@ render('/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_vali
 ```
 
 ```{r var_setup, include=TRUE,echo=1:3}
-analysis_build<-'hg38'
+analysis_build<-'hg19'
 happy_path<-'/media/SSD/Bioinformatics/Tools/hap.py-build/bin/hap.py'
 reference<-ifelse(analysis_build=='hg19',
                   '/media/SSD/Bioinformatics/Databases/hg19/hg19.fa',
@@ -28,11 +28,11 @@ vcfeval_template<-ifelse(analysis_build=='hg19',
                      '/media/SSD/Bioinformatics/Databases/hg19/hg19.SDF',
                      '/media/SSD/Bioinformatics/Databases/hg38/hg38_SDF')
 
-#target_region<-'/media/SSD/Bioinformatics/Databases/idt/xgen-exome-research-panel-v2-targets-hg19.bed'
+target_region<-'/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications/Twist_ComprehensiveExome_targets_hg19.bed'
 #target_region<-'/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/targets/refseq_select_cds.bed'
-target_region<-NA  # NA - means that there is no target region - run the analysis on the whole genome
+#target_region<-NA  # NA - means that there is no target region - run the analysis on the whole genome
 
-vcf_stats=F # whether or not to perform vcf stats collection
+vcf_stats=T # whether or not to perform vcf stats collection
 ```
 
 ```{r markdown_setup,include=FALSE}
@@ -101,11 +101,15 @@ DT::datatable(strat_files_stats,
 
 ```{r vcf_stats,out.width="150%",include=TRUE,results='hide',message=FALSE,warnings=FALSE}
 if (vcf_stats){
-  info(logger,print(sprintf('Producing VCF coverage plot..')))
-  all_vcfs<-read_all_vcfs(samples_sheet)
-  vcf_coverage_plot<-plot_vcfs_coverage(all_vcfs)
-  vcf_coverage_plot
+  info(logger,print(sprintf('Producing VCF stats..')))
+  all_vcf_stats<-get_all_vcf_stats_with_stratifications()
+  DT::datatable(all_vcf_stats%>%select(-Location),
+                options=list(scrollX=T),
+                filter = list(position = 'top', clear = FALSE))
 }
+
+
+plot_vcfstats_results(all_vcf_stats,target='ALL')
 ```
 
 # Hap.py results: All samples

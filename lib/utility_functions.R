@@ -12,7 +12,7 @@ validate_happy_input<-function(truth_vcf,query_vcf,reference,fp_bed){
 run_happy<-function(happy_path,truth_vcf,query_vcf,reference,fp_bed,output_prefix,
                     target_region=NA,
                     vcfeval=TRUE,
-                    vcfeval_path='/media/SSD/Bioinformatics/Tools/rtg-tools-3.12.1-32d4c2d2/rtg',
+                    rtg_path='/media/SSD/Bioinformatics/Tools/rtg-tools-3.12.1-32d4c2d2/rtg',
                     vcfeval_template='/media/SSD/Bioinformatics/Databases/hg19/hg19.SDF',
                     stratification='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications.csv',
                     log_file='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/logs/project.log'){
@@ -33,7 +33,7 @@ run_happy<-function(happy_path,truth_vcf,query_vcf,reference,fp_bed,output_prefi
     
   }
   if (vcfeval){
-    happy_command<-sprintf('%s --engine vcfeval --engine-vcfeval-path %s --engine-vcfeval-template %s',happy_command,vcfeval_path,vcfeval_template)
+    happy_command<-sprintf('%s --engine vcfeval --engine-vcfeval-path %s --engine-vcfeval-template %s',happy_command,rtg_path,vcfeval_template)
   }
   if (!is.na(stratification)){
     happy_command<-sprintf('%s --stratification %s',happy_command,stratification)
