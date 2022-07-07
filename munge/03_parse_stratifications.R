@@ -13,7 +13,6 @@ validate_input_bed_file<-function(input_bed_file){
   
 }
 
-
 # parse stratification files
 stratification_files<-list.files('/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications',full.names = T,recursive = T)
 for (strat_file in stratification_files){

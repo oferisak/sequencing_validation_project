@@ -198,3 +198,11 @@ is_sample_already_analyzed<-function(output_prefix){
   return(FALSE)
 }
 
+# fix target file for hap.py - take in a target file and keep only the chr,start and end columns.
+prep_target_file_for_happy<-function(target_file_path,output_dir){
+  output_target_file_name<-glue('{output_dir}/{basename(target_file_path)}')
+  fix_command<-glue('cat {{target_file_path}} | awk -F"\\t" \'{print $1"\\t"$2"\\t"$3}\' > {{output_target_file_name}}',.open = '{{',.close = '}}')
+  message(glue('Running {fix_command}'))
+  system(fix_command)
+  return(output_target_file_name)
+}
