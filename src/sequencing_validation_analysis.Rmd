@@ -11,6 +11,17 @@ output:
     fig_height: 8
 ---
 
+This script performs the following steps
+- parses the files in the input_vcf and creates a samples_sheet table
+- parses the files in the stratification folder - fixes them to comply with Hap.py and creates a stratification file
+- runs Hap.py to compare the different input vcfs against the relevant GIAB reference
+- generates a report that summarizes the results
+
+!! Make sure !!
+- only the stratification files you want are in the data/stratification folder
+- only the vcf files you want are in the data/input_vcfs folder
+
+
 ```{r variable_setup,eval=F,echo=F}
 # define analysis folder 
 # if you want to re-analyze a previous folder, just change the name to the appropriate folder
@@ -21,6 +32,8 @@ if (!dir.exists(glue('./output/{analysis_dir}'))){dir.create(glue('./output/{ana
 
 analysis_build<-'hg19'
 
+# Define Target Region -
+# Should probably keep this as NA because what you want is to run the analysis on the enitre data and add the target as a stratification (just add the bed file to the stratification dir, it will be fixed accordingly)
 #target_region<-'/media/SSD/Bioinformatics/Databases/idt/xgen-exome-research-panel-v2-targets-hg19.bed'
 #target_region<-'/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications/refseq_hg19_curated_cds_20220414.bed.gz'
 target_region<-NA  # NA - means that there is no target region - run the analysis on the whole genome
