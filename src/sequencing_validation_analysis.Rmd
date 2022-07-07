@@ -11,13 +11,25 @@ output:
     fig_height: 8
 ---
 
+```{r analysis_folder,eval=F,echo=F}
+# define analysis folder 
+# if you want to re-analyze a previous folder, just change the name to the appropriate folder
+analysis_name<-glue('idt_vs_twist_{Sys.Date()}')
+analysis_dir<-glue('{analysis_name}')
+if (!dir.exists(glue('./output/{analysis_dir}'))){dir.create(glue('./output/{analysis_dir}'))}
+```
+
+
 ```{r render_report,eval=F,echo=F}
 library(rmarkdown)
-output_dir <- "/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/output/reports"
+output_dir <- glue("/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/output/{analysis_dir}/report")
 render('/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/src/sequencing_validation_analysis.Rmd', output_dir = output_dir,output_file = sprintf('vcf_validation_report.%s.html',Sys.Date()))
 ```
 
 ```{r var_setup, include=TRUE,echo=1:3}
+
+
+
 analysis_build<-'hg19'
 happy_path<-'/media/SSD/Bioinformatics/Tools/hap.py-build/bin/hap.py'
 reference<-ifelse(analysis_build=='hg19',
@@ -28,9 +40,9 @@ vcfeval_template<-ifelse(analysis_build=='hg19',
                      '/media/SSD/Bioinformatics/Databases/hg19/hg19.SDF',
                      '/media/SSD/Bioinformatics/Databases/hg38/hg38_SDF')
 
-target_region<-'/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications/Twist_ComprehensiveExome_targets_hg19.bed'
-#target_region<-'/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/targets/refseq_select_cds.bed'
-#target_region<-NA  # NA - means that there is no target region - run the analysis on the whole genome
+#target_region<-'/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications/idt_v2_twist_exome2_plus_agilent_v8_intersect.bed'
+#target_region<-'/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications/refseq_hg19_curated_cds_20220414.bed.gz'
+target_region<-NA  # NA - means that there is no target region - run the analysis on the whole genome
 
 vcf_stats=T # whether or not to perform vcf stats collection
 ```
@@ -45,6 +57,10 @@ load.project()
 ```
 
 ```{r run_happy,eval=TRUE,echo=FALSE,results=FALSE}
+# validate the target region
+if (!is.na(target_region)){
+  validate_input_bed_file(target_region)
+}
 
 for (i in 1:nrow(samples_sheet)) {
 #for (i in 1:1) {
@@ -54,7 +70,7 @@ for (i in 1:nrow(samples_sheet)) {
   fp_bed <- giab_ref %>% pull(false_positive)
   query <- sample %>% pull(query_path)
   output_prefix <- sample %>% pull(query_name)
-  if (is_sample_already_analyzed(output_prefix)) {
+  if (is_sample_already_analyzed(glue('{analysis_dir}/{output_prefix}'))) {
     next
   }# make sure sample was not already ran
   info(logger, print(
@@ -73,7 +89,8 @@ for (i in 1:nrow(samples_sheet)) {
     target_region = target_region,
     fp_bed = fp_bed,
     vcfeval_template = vcfeval_template,
-    output_prefix = output_prefix
+    output_prefix = output_prefix,
+    analysis_dir = analysis_dir
   )
   info(logger, print(sprintf('Done analyzing %s.', output_prefix)))
 }
@@ -99,7 +116,10 @@ DT::datatable(strat_files_stats,
 
 # VCF stats
 
-```{r vcf_stats,out.width="150%",include=TRUE,results='hide',message=FALSE,warnings=FALSE}
+### VCFs stats table
+
+```{r vcf_stats,out.width="150%",include=TRUE,message=FALSE,warnings=FALSE}
+all_vcf_stats<-get_all_vcf_stats_with_stratifications()
 if (vcf_stats){
   info(logger,print(sprintf('Producing VCF stats..')))
   all_vcf_stats<-get_all_vcf_stats_with_stratifications()
@@ -108,15 +128,26 @@ if (vcf_stats){
                 filter = list(position = 'top', clear = FALSE))
 }
 
+```
 
-plot_vcfstats_results(all_vcf_stats,target='ALL')
+### VCF stats plots {.tabset}
+
+```{r, results = 'asis',fig.width=12,fig.height=8}
+for (target in unique(all_vcf_stats$target)){
+  cat("#### ", target, "\n")
+  p<-plot_vcfstats_results(all_vcf_stats,target_filter=target)
+  #cat(knitr::knit_print(print(p)))
+  knitr::knit_print(p)
+  cat("\n\n")
+}
 ```
 
 # Hap.py results: All samples
 
 ```{r happy_results_table,eval=T}
 # retrieve the happy outcome files
-happy_results<-collect_happy_results(samples_sheet)
+happy_results<-collect_happy_results(samples_sheet,analysis_dir)
+happy_results<-happy_results%>%mutate(across(where(is.character),as.factor))
 DT::datatable(happy_results,
               extensions = 'Buttons', 
               options=list(scrollX=T,dom = 'Bfrtip',buttons = c('copy', 'csv', 'excel')),
@@ -127,7 +158,8 @@ DT::datatable(happy_results,
 
 ```{r happy_results_per_sample,eval=T, results='asis',warning=F}
 # retrieve the happy outcome files
-happy_results<-collect_happy_results(samples_sheet)
+happy_results<-collect_happy_results(samples_sheet,analysis_dir)
+happy_results<-happy_results%>%mutate(across(where(is.character),as.factor))
 for (sample_name in unique(happy_results$query_name)){
   cat('## ',sample_name,'\n')
   sample_table<-generate_sample_table(happy_results,sample_name)
@@ -156,6 +188,7 @@ cat('\n\n')
 
 # summarize results
 happy_summary<-happy_summary_per_group(happy_results)
+happy_summary<-happy_summary%>%mutate(across(where(is.character),as.factor))
 DT::datatable(
   happy_summary,
   extensions = 'Buttons',

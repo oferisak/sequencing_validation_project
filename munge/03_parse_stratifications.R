@@ -1,7 +1,31 @@
+validate_input_bed_file<-function(input_bed_file){
+  input_bed<-readr::read_delim(input_bed_file,col_names = c('chr','start','end'))
+  if (ncol(input_bed)>3){message(glue('There are more than 3 columns in input bed file {input_bed_file}, will remove them'))}
+  
+  # if the input was gzipped, save it unpacked then gzip it
+  if (grepl('.gz',input_bed_file)){
+    #write.table(as.data.frame(input_bed[,1:3]),file=stringr::str_replace(input_bed_file,'.gz',''),row.names = F,col.names = F,sep='\t',quote = F)
+    write.table(format(as.data.frame(input_bed[,1:3]),scientific=F,trim=T,justify='none'),file=stringr::str_replace(input_bed_file,'.gz',''),row.names = F,col.names = F,sep='\t',quote = F)
+    system(glue('gzip -f {stringr::str_replace(input_bed_file,".gz","")}'))
+  }else{
+    write.table(format(as.data.frame(input_bed[,1:3]),scientific=F,trim=T,justify='none'),file=stringr::str_replace(input_bed_file,'.gz',''),row.names = F,col.names = F,sep='\t',quote = F)
+  }
+  
+}
+
 
 # parse stratification files
-stratification_files<-read.table('./data/stratifications.csv',header=F,sep='\t')
-colnames(stratification_files)<-c('stratification_name','stratification_file')
+stratification_files<-list.files('/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications',full.names = T,recursive = T)
+for (strat_file in stratification_files){
+  validate_input_bed_file(strat_file)
+}
+
+stratification_files<-data.frame(stratification_file=stratification_files,stratification_name=stringr::str_replace(basename(stratification_files),'.bed',''))
+# generate the stratifications file
+write.table(stratification_files%>%select(stratification_name,stratification_file),
+            sep = '\t',
+            file='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications.csv',
+            row.names = F,col.names = F,quote = F)
 
 # Parse a bed file and output:
 # number of regions

@@ -9,7 +9,7 @@ validate_happy_input<-function(truth_vcf,query_vcf,reference,fp_bed){
 
 # create happy command
 # vcfeval - whether or not to use the vcfeval engine for comparison, otherwise hap.py uses xcmp
-run_happy<-function(happy_path,truth_vcf,query_vcf,reference,fp_bed,output_prefix,
+run_happy<-function(happy_path,truth_vcf,query_vcf,reference,fp_bed,output_prefix,analysis_dir,
                     target_region=NA,
                     vcfeval=TRUE,
                     rtg_path='/media/SSD/Bioinformatics/Tools/rtg-tools-3.12.1-32d4c2d2/rtg',
@@ -17,6 +17,7 @@ run_happy<-function(happy_path,truth_vcf,query_vcf,reference,fp_bed,output_prefi
                     stratification='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/data/stratifications.csv',
                     log_file='/media/SSD/Bioinformatics/Projects/sequencing_validation/sequencing_validation_project/logs/project.log'){
   
+  original_path<-getwd()
   validate_happy_input(truth_vcf,query_vcf,reference,fp_bed)
   
   happy_command<-sprintf('%s %s %s "%s" -r %s -f %s -o %s -X -V --no-roc --logfile %s',
@@ -41,27 +42,27 @@ run_happy<-function(happy_path,truth_vcf,query_vcf,reference,fp_bed,output_prefi
   
   message(sprintf('Running: %s',happy_command))
   info(logger,happy_command)
-  output_dir<-sprintf('./output/%s',output_prefix)
+  output_dir<-glue('./output/{analysis_dir}/{output_prefix}')
   if (!dir.exists(output_dir)){dir.create(output_dir)}
   setwd(output_dir)
   system(happy_command)
-  setwd('../..')
+  setwd(original_path)
 }
 
 # collect happy results
-collect_happy_results<-function(samples_sheet){
+collect_happy_results<-function(samples_sheet,analysis_dir){
   happy_outcomes<-NULL
   for (i in 1:nrow(samples_sheet)){
     sample<-samples_sheet%>%slice(i)
     query_group<-sample%>%pull(query_group)
     query_name<-sample%>%pull(query_name)
-    happy_output_file<-glue('./output/{query_name}/{query_name}.extended.csv')
+    happy_output_file<-glue('./output/{analysis_dir}/{query_name}/{query_name}.extended.csv')
     # Parse happy output
     if (!file.exists(happy_output_file)){
       message(glue('{query_name} was not properly analyzed. could not find {happy_output_file}'))
       next
       }
-    happy_extended<-read.table(sprintf('./output/%s/%s.extended.csv',query_name,query_name),header=T,sep=',')
+    happy_extended<-read.table(glue('./output/{analysis_dir}/{query_name}/{query_name}.extended.csv'),header=T,sep=',')
     happy_outcomes<-happy_outcomes%>%rbind(data.frame(query_group,query_name,happy_extended))
   }
   return(happy_outcomes)
@@ -189,7 +190,7 @@ generate_sample_table <- function(happy_results, sample_name) {
 # check in the output folder, if there is a folder called 'output_prefix' and if so, if there is a summary file there
 is_sample_already_analyzed<-function(output_prefix){
   if (dir.exists(sprintf('./output/%s',output_prefix))){
-    if (file.exists(sprintf('./output/%s/%s.summary.csv',output_prefix,output_prefix))){
+    if (any(grepl('summary.csv',list.files(glue('./output/{output_prefix}'))))){
       info(logger,print(sprintf('%s already analyzed, skipping hap.py stage.',output_prefix)))
       return(TRUE)
     }

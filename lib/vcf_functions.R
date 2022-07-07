@@ -28,6 +28,7 @@ get_all_vcf_stats_with_stratifications<-function(){
   all_vcf_stats<-get_samples_sheet_vcf_stats(samples_sheet,target = 'ALL')
   for (i in 1:nrow(stratification_files)){
     strat_name<-stratification_files%>%slice(i)%>%pull(stratification_name)
+    message(glue('vcf_functions: Analyzing stratification region: {strat_name}'))
     strat_file<-stratification_files%>%slice(i)%>%pull(stratification_file)
     strat_vcf_stats<-get_samples_sheet_vcf_stats(samples_sheet,strat_file)
     strat_vcf_stats$target<-strat_name
@@ -36,21 +37,28 @@ get_all_vcf_stats_with_stratifications<-function(){
   return(all_vcf_stats)
 }
 
-plot_vcfstats_results<-function(all_vcf_stats,target='ALL'){
-  toPlot<-all_vcf_stats%>%filter(target=='ALL')%>%select(c(sample_name,
+plot_vcfstats_results<-function(all_vcf_stats,target_filter='ALL'){
+  toPlot<-all_vcf_stats%>%filter(target==target_filter)%>%select(c(group_name,sample_name,
                                    target,
                                    `Passed Filters`,
                                    SNPs,
                                    Insertions,
                                    Deletions,
                                    Indels))%>%
-    pivot_longer(-c(sample_name,target))
-  toPlot$group=stringr::str_replace(toPlot$sample_name,'_hg.+','')
-  toPlot$ref=stringr::str_match(toPlot$sample_name,'hg.+')[,1]
-  toPlot%>%ggplot(aes(x=sample_name,y=value,fill=group,col=group,label=value))+
-    geom_col(width= 0.5,alpha=0.5)+geom_text(vjust=1.5,col='black')+
+    pivot_longer(-c(group_name,sample_name,target))%>%
+    mutate(name=forcats::fct_relevel(factor(name),'Passed Filters','SNPs','Deletions','Insertions'))
+  toPlot$group=stringr::str_replace(toPlot$group_name,'_hg.+','')
+  toPlot$ref=stringr::str_match(toPlot$group_name,'hg.+')[,1]
+  g<-toPlot%>%ggplot(aes(x=forcats::fct_reorder(factor(sample_name),order(toPlot$group_name)),y=value,fill=group,col=group,label=value))+
+    geom_col(width= 0.5,alpha=0.5,position='dodge')+geom_text(vjust=0.5,hjust=-0.5,col='black')+
     facet_grid(name~ref,scales='free')+
-    theme_minimal()+scale_color_nejm()+scale_fill_nejm()
+    ylim(0,max(toPlot$value)+0.1*max(toPlot$value))+
+    coord_flip()+labs(fill=NULL,col=NULL,x=NULL,title=target)+
+    theme_minimal()+
+    theme(legend.position = 'top')+
+    scale_color_nejm()+scale_fill_nejm()
+  g
+  return(g)
 }
 
 get_samples_sheet_vcf_stats<-function(samples_sheet,target=NA){
@@ -58,8 +66,11 @@ get_samples_sheet_vcf_stats<-function(samples_sheet,target=NA){
   for (i in 1:nrow(samples_sheet)){
     vcf_path<-samples_sheet%>%slice(i)%>%pull(query_path)
     vcf_name<-samples_sheet%>%slice(i)%>%pull(query_name)
+    vcf_group<-samples_sheet%>%slice(i)%>%pull(query_group)
     sample_vcf_stats<-get_vcf_stats(vcf_path,target)
-    sample_vcf_stats<-sample_vcf_stats%>%mutate(sample_name=vcf_name,.before=1)
+    sample_vcf_stats<-sample_vcf_stats%>%mutate(group_name=vcf_group,
+                                                sample_name=vcf_name,
+                                                .before=1)
     samples_sheet_vcf_stats<-samples_sheet_vcf_stats%>%bind_rows(sample_vcf_stats)
   }
   return(samples_sheet_vcf_stats)
